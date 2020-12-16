@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">CsoportSms</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
+    <string name="telefonsz_m_amit_hozz_szeretn_l_adni">Telefonszám amit hozzá szeretnél adni</string>
+    <string name="kiszed">Kiszed</string>
+    <string name="hozz_ad">Hozzáad</string>
+</resources>
