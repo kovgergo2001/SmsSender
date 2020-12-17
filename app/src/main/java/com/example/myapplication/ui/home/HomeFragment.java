@@ -12,6 +12,9 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.telephony.SmsManager;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -29,6 +32,7 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.example.myapplication.MainActivity;
 import com.example.myapplication.R;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -38,6 +42,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.sql.SQLOutput;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -76,6 +81,16 @@ public class HomeFragment extends Fragment {
                 textView.setText(s);
             }
         });
+
+        Handler mHandler = new Handler(Looper.getMainLooper()) {
+            @Override
+            public void handleMessage(Message message) {
+                textView.setText((CharSequence) message.obj);
+                // Toast.makeText(getActivity().getBaseContext(), (CharSequence) message.obj,Toast.LENGTH_LONG).show();
+            }
+
+        };
+
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setCancelable(true);
         builder.setTitle("Megerősítés");
@@ -84,28 +99,81 @@ public class HomeFragment extends Fragment {
                 new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        SmsManager smsManager = SmsManager.getDefault();
+                        Context mContext = getActivity().getBaseContext();
+                        Thread sender = new Thread(() -> {
+                            SmsManager smsManager = SmsManager.getDefault();
 
-                        String message = Msg.getText().toString();
-                        ArrayList<String> parts = smsManager.divideMessage(message);
-                        String phoneNo;
-                        phoneNo = list.get(0).trim();
-                        for (int i = 1; i < list.size(); i++) {
-                            phoneNo = list.get(i).trim();
+                            String message = Msg.getText().toString();
+                            ArrayList<String> parts = smsManager.divideMessage(message);
+                            String phoneNo;
+                            final int[] sentMsg = {parts.size()};
+                            final boolean[] failed = {false};
+                            for (int i = 0; i < list.size(); i++) {
+                                failed[0] = false;
+                                phoneNo = list.get(i).trim();
+                                String SENT = "SMS_SENT";
+                                ArrayList<PendingIntent> sentPI = new ArrayList<>();
+                                final Boolean[] sent = {false};
+                                sentMsg[0] = parts.size();
+                                BroadcastReceiver myBroadcast = new BroadcastReceiver() {
+                                    @Override
+                                    public void onReceive(Context arg0, Intent arg1) {
+                                        switch (getResultCode()) {
+                                            case Activity.RESULT_OK:
+                                                sentMsg[0]--;
+                                                System.out.println("elment:" + sentMsg[0]);
+                                                break;
+                                            case SmsManager.RESULT_ERROR_GENERIC_FAILURE:
+                                            case SmsManager.RESULT_ERROR_NULL_PDU:
+                                            case SmsManager.RESULT_ERROR_NO_SERVICE:
+                                            case SmsManager.RESULT_ERROR_RADIO_OFF:
+                                                failed[0] = true;
+                                                System.out.println("hiba");
+                                                break;
+                                        }
+                                        if (sentMsg[0] == 0) {
+                                            sent[0] = true;
+                                        }
+                                    }
+                                };
+                                mContext.registerReceiver(myBroadcast, new IntentFilter(SENT));
 
-                            smsManager.sendMultipartTextMessage(phoneNo, null, parts, null, null);
 
-                            try {
-                                TimeUnit.MILLISECONDS.sleep(1000);
-                                System.out.println("Megvan!");
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
+                                for (int j = 0; j < parts.size(); j++) {
+                                    sentPI.add(PendingIntent.getBroadcast(mContext, 0, new Intent(SENT), 0));
+                                    //pendingIntents.add(PendingIntent.getBroadcast(mContext, 0, sentIntent, 0));
+                                }
+
+                                System.out.println(sentPI.size());
+
+                                smsManager.sendMultipartTextMessage(phoneNo, null, parts, sentPI, null);
+                                System.out.println("elkell menjen:" + parts.size());
+                                try {
+                                    while (!sent[0]) {
+                                        Thread.sleep(100);
+                                        if (failed[0]) {
+                                            i--;
+                                            break;
+                                        }
+                                    }
+                                    //CharSequence mess = (i + 1) + ". SMS elkuldve!";
+                                    //textView.setText(mess);
+                                    //Toast.makeText(getActivity().getBaseContext(),"asd", Toast.LENGTH_SHORT).show();
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                } catch (RuntimeException e) {
+                                    e.printStackTrace();
+                                }
+
+                                mContext.unregisterReceiver(myBroadcast);
+                                System.out.printf("");
                             }
-
-                        }
-
-
-                        Toast.makeText(getActivity().getBaseContext(), "SMS-ek átmásolva sikeresen.", Toast.LENGTH_LONG).show();
+                            //Toast.makeText(mContext, "SMS-ek kuldese elkezdve.", Toast.LENGTH_LONG).show();
+                            Message ms = mHandler.obtainMessage(0, "Uzenetek elkuldve");
+                            ms.sendToTarget();
+                        });
+                        sender.start();
+                        Toast.makeText(mContext, "SMS-ek kuldese elkezdve.", Toast.LENGTH_LONG).show();
                     }
                 });
         builder.setNegativeButton("Nem", new DialogInterface.OnClickListener() {
@@ -113,6 +181,8 @@ public class HomeFragment extends Fragment {
             public void onClick(DialogInterface dialog, int which) {
             }
         });
+
+
         Send.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
